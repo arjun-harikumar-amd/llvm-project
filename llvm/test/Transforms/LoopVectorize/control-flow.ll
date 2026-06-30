@@ -10,7 +10,7 @@
 ;   return 0;
 ; }
 
-; CHECK: remark: source.cpp:5:9: loop not vectorized: Cannot determine whether critical uncountable exit load address does not alias with a memory write
+; CHECK: remark: source.cpp:5:9: loop not vectorized: Cannot determine whether an early-exit condition load aliases a store (deferred stores must not be observed out of order)
 ; CHECK: remark: source.cpp:5:9: loop not vectorized
 
 ; CHECK: _Z4testPii

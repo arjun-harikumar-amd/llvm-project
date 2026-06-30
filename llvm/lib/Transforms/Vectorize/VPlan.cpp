@@ -1291,6 +1291,24 @@ VPlan *VPlan::duplicate() {
       NewPlan->ExitBlocks.push_back(cast<VPIRBasicBlock>(VPB));
   }
 
+  // Stable IR pointers (unreachable / keyed on IR), so copy directly.
+  NewPlan->CheckFirst.EarlyExitBlock = CheckFirst.EarlyExitBlock;
+  NewPlan->CheckFirst.InclusiveReplayStores = CheckFirst.InclusiveReplayStores;
+
+  // Remap a block pointer to its clone via parallel old/new tree walk.
+  auto RemapBlock = [&](VPBasicBlock *Old) -> VPBasicBlock * {
+    if (!Old)
+      return nullptr;
+    for (const auto &[OldBB, NewBB] :
+         zip(vp_depth_first_deep(Entry), vp_depth_first_deep(NewEntry)))
+      if (OldBB == Old)
+        return cast<VPBasicBlock>(NewBB);
+    llvm_unreachable("check-first block not found in cloned plan");
+  };
+  NewPlan->CheckFirst.ExitBlock = RemapBlock(CheckFirst.ExitBlock);
+  NewPlan->CheckFirst.MaskedReplayBlock = RemapBlock(CheckFirst.MaskedReplayBlock);
+  NewPlan->CheckFirst.CheckHeaderBlock = RemapBlock(CheckFirst.CheckHeaderBlock);
+
   return NewPlan;
 }
 

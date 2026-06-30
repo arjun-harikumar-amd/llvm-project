@@ -260,6 +260,13 @@ struct HistogramInfo {
 ///                that may require masking.
 enum class UncountableExitTrait { None, ReadOnly, ReadWrite };
 
+/// Memory-safety strategy for multi-exit vectorized loops.
+enum class EarlyExitMemSafety {
+  /// All loads are provably dereferenceable for the full latch trip count.
+  StaticallyDereferenceable,
+  Unsafe,
+};
+
 /// LoopVectorizationLegality checks if it is legal to vectorize a loop, and
 /// to what vectorization factor.
 /// This class does not look at the profitability of vectorization, only the
@@ -438,6 +445,18 @@ public:
   /// faulting operations take place.
   bool hasUncountableExitWithSideEffects() const {
     return getUncountableExitTrait() == UncountableExitTrait::ReadWrite;
+  }
+
+  /// Returns the memory-safety strategy determined during legality analysis.
+  EarlyExitMemSafety getMemSafetyStrategy() const { return MemSafety; }
+
+  /// Returns true if this early-exit loop would use the check-first strategy if
+  /// enabled. Callers must also check EnableCheckFirstVectorization.
+  bool wouldUseCheckFirstStyle() const {
+    if (hasUncountableExitWithSideEffects())
+      return true;
+    return hasUncountableEarlyExit() &&
+           MemSafety != EarlyExitMemSafety::StaticallyDereferenceable;
   }
 
   /// Return true if there is store-load forwarding dependencies.
@@ -635,6 +654,14 @@ private:
   /// for it.
   bool canUncountableExitConditionLoadBeMoved(BasicBlock *ExitingBlock);
 
+  /// Relaxed viability check for check-first vectorization of an early-exit
+  /// loop with stores. Unlike canUncountableExitConditionLoadBeMoved, accepts
+  /// multiple exits and multi-use condition loads, requiring only that each
+  /// condition load has an affine address and does not alias a store. Records
+  /// other memory operations as conditionally executed.
+  bool canCheckFirstSpeculateExitConditions(
+      ArrayRef<BasicBlock *> ExitingBlocks);
+
   /// Return true if all of the instructions in the block can be speculatively
   /// executed, and record the loads/stores that require masking.
   /// \p SafePtrs is a list of addresses that are known to be legal and we know
@@ -752,6 +779,9 @@ private:
   /// Records whether we have an uncountable early exit in a loop that's
   /// either read-only or read-write.
   UncountableExitTrait UncountableExitType = UncountableExitTrait::None;
+
+  EarlyExitMemSafety MemSafety =
+      EarlyExitMemSafety::StaticallyDereferenceable;
 };
 
 } // namespace llvm

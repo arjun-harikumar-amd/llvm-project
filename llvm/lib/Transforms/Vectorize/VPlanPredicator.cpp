@@ -274,6 +274,9 @@ void VPlanTransforms::introduceMasksAndLinearize(VPlan &Plan) {
   // Nested loop regions (outer-loop vectorization) are not supported yet.
   if (Plan.isOuterLoop())
     return;
+  // Check-first early exits keep an explicit multi-successor CFG.
+  if (Plan.getCheckFirstExitBlock())
+    return;
   VPRegionBlock *LoopRegion = Plan.getVectorLoopRegion();
   // Scan the body of the loop in a topological order to visit each basic block
   // after having visited its predecessor basic blocks.

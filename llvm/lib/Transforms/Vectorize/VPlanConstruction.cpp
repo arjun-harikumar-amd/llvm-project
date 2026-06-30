@@ -462,13 +462,28 @@ static void createLoopRegion(VPlan &Plan, VPBlockBase *HeaderVPB, DebugLoc DL) {
   // Transfer latch's successors to the region.
   VPBlockUtils::transferSuccessors(LatchVPBB, R);
 
+  // Keep check.exit in the region via a temporary edge to LatchVPBB;
+  // wireCheckFirstExitToScalar rewires it to ScalarPH after dissolution.
+  VPBasicBlock *CheckExitVPBB = Plan.getCheckFirstExitBlock();
+  if (CheckExitVPBB) {
+    assert(CheckExitVPBB->empty() &&
+           "check.exit block should be empty before region creation");
+    assert(CheckExitVPBB->getNumSuccessors() == 0 &&
+           "check.exit should have no successors before temporary edge");
+    VPBlockUtils::connectBlocks(CheckExitVPBB, LatchVPBB);
+  }
+
   VPBlockUtils::connectBlocks(PreheaderVPBB, R);
   R->setEntry(HeaderVPB);
   R->setExiting(LatchVPBB);
 
-  // All VPBB's reachable shallowly from HeaderVPB belong to the current region.
-  for (VPBlockBase *VPBB : vp_depth_first_shallow(HeaderVPB))
+  // All VPBB's reachable shallowly from HeaderVPB belong to the current
+  // region.
+  for (VPBlockBase *VPBB : vp_depth_first_shallow(HeaderVPB)) {
+    if (VPBB == Plan.getScalarPreheader())
+      continue;
     VPBB->setParent(R);
+  }
 
   if (!IsOutermost)
     return;
@@ -1260,6 +1275,8 @@ static bool areAllLoadsDereferenceable(VPBasicBlock *HeaderVPBB, Loop *TheLoop,
   return true;
 }
 
+/// For CheckFirst, only the condition-slice loads need be dereferenceable; body
+/// loads are guarded by the exit check.
 bool VPlanTransforms::handleEarlyExits(VPlan &Plan, UncountableExitStyle Style,
                                        Loop *TheLoop,
                                        PredicatedScalarEvolution &PSE,
@@ -1272,9 +1289,8 @@ bool VPlanTransforms::handleEarlyExits(VPlan &Plan, UncountableExitStyle Style,
   //       here from handleUncountableEarlyExits, but we need to improve
   //       detection of recipes which may write to memory.
   if (Style != UncountableExitStyle::NoUncountableExit) {
-    // Dereferenceability is checked separately for uncountable exit loops with
-    // stores, as only the loads contributing to the exit condition need to
-    // be checked.
+    // ReadOnly needs all loads dereferenceable; CheckFirst checks only
+    // condition-slice loads later in handleUncountableEarlyExits.
     if (Style == UncountableExitStyle::ReadOnly &&
         !areAllLoadsDereferenceable(HeaderVPBB, TheLoop, PSE, DT, AC))
       return false;
