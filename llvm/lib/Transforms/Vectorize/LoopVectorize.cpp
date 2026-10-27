@@ -417,6 +417,11 @@ cl::opt<bool> llvm::EnableCheckFirstVectorization(
     cl::desc("Enable check-first vectorization of early exit loops with "
              "multiple exits."));
 
+cl::opt<bool> EnableCheckFirstMaskedReplay(
+    "enable-check-first-masked-replay", cl::init(false), cl::Hidden,
+    cl::desc("Replace scalar replay in check-first early exit vectorization "
+             "with a masked vector replay."));
+
 // Returns true if the epilogue VF has been set to a non-zero value other than
 // VF=1 (scalar).
 static bool hasForcedEpilogueVF() {
@@ -429,6 +434,8 @@ static bool hasForcedEpilogueVF() {
 /// from the loop.
 static bool usesCheckFirstReplay(const LoopVectorizationLegality *Legal) {
   if (!Legal->hasUncountableEarlyExit())
+    return false;
+  if (EnableCheckFirstMaskedReplay)
     return false;
   if (Legal->hasUncountableExitWithSideEffects())
     return !EnableEarlyExitVectorizationWithSideEffects;
@@ -5962,6 +5969,8 @@ DenseMap<const SCEV *, Value *> LoopVectorizationPlanner::executePlan(
   // Scalar replay routes check.exit to the scalar preheader after region
   // dissolution.
   VPlanTransforms::wireCheckFirstExitToScalar(BestVPlan);
+  // Masked replay routes check.exit to the real early exit block instead.
+  VPlanTransforms::wireCheckFirstMaskedReplayToExit(BestVPlan);
   // Expand BranchOnTwoConds after dissolution, when latch has direct access to
   // its successors.
   RUN_VPLAN_PASS(VPlanTransforms::expandBranchOnTwoConds, BestVPlan);
