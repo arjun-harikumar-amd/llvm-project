@@ -3682,7 +3682,7 @@ bool VPlanTransforms::handleUncountableEarlyExits(
   auto *MiddleVPBB = VPBlockUtils::getPlainCFGMiddleBlock(Plan);
   auto [HeaderVPBB, LatchVPBB] = VPBlockUtils::getPlainCFGHeaderAndLatch(Plan);
 
-  if (loopHasStores(HeaderVPBB))
+  if (loopHasStores(HeaderVPBB) && Style != UncountableExitStyle::CheckFirst)
     Style = UncountableExitStyle::MaskedHandleExitInScalarLoop;
 
   // Dereferenceability is checked separately for uncountable exit loops with
@@ -3806,7 +3806,8 @@ bool VPlanTransforms::handleUncountableEarlyExits(
                             {IsAnyExitTaken, IsLatchExitTaken}, LatchDL);
   LatchVPBB->clearSuccessors();
 
-  if (Style == UncountableExitStyle::MaskedHandleExitInScalarLoop) {
+  if (Style == UncountableExitStyle::MaskedHandleExitInScalarLoop ||
+      Style == UncountableExitStyle::CheckFirst) {
     // If handling the exiting lane in the scalar loop, combine the exit
     // conditions into a single BranchOnCond.
     LatchVPBB->setSuccessors({MiddleVPBB, MiddleVPBB, HeaderVPBB});
