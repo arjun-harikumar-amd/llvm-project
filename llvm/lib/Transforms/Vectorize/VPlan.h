@@ -90,6 +90,14 @@ enum class UncountableExitStyle {
   /// If masking is not legal, try to skip these memory operations when any lane
   /// exits, leaving all lanes to execute in the scalar tail.
   MaskedHandleExitInScalarLoop,
+  /// Split the loop body into two blocks: a check block and a vector body.
+  /// The check block evaluates the EE condition. It contains the condition plus
+  /// the minimal instructions needed to compute it.
+  /// The vector body runs the rest of the loop.
+  /// The check block branches either to the vector body or to the scalar tail.
+  /// If the EE condition is true for any lane in a vector iteration, the whole
+  /// iteration is replayed in the scalar tail.
+  CheckFirst,
 };
 
 /// VPBlockBase is the building block of the Hierarchical Control-Flow Graph.
